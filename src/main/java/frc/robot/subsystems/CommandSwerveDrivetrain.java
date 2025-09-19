@@ -15,6 +15,7 @@ import com.pathplanner.lib.path.PathConstraints;
 import edu.wpi.first.math.Matrix;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.kinematics.ChassisSpeeds;
 import edu.wpi.first.math.numbers.N1;
 import edu.wpi.first.math.numbers.N3;
 import edu.wpi.first.wpilibj.DriverStation;
@@ -304,13 +305,29 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     //     );
     // }
 
+    public Pose2d getPose() {
+        return getState().Pose;
+    }
+    
+    public void resetPose(Pose2d pose) {
+        this.resetPosition(pose);
+    }
+    
+    public ChassisSpeeds getRobotRelativeSpeeds() {
+        return getState().Speeds;
+    }
+    
+    public void driveRobotRelative(ChassisSpeeds speeds) {
+        setControl(new SwerveRequest.ApplyChassisSpeeds().withSpeeds(speeds));
+    }
+    
     public Command driveToPose(Pose2d pose) {
         PathConstraints constraints = new PathConstraints(
             1.5, 1.5,               // max linear velocity and accel (m/s, m/s^2)
             MAX_ANGULAR_VELOCITY,   // max angular velocity (rad/s)
             Math.toRadians(720)     // max angular accel (rad/s^2)
         );
-
+    
         return AutoBuilder.pathfindToPose(
             pose,
             constraints,
