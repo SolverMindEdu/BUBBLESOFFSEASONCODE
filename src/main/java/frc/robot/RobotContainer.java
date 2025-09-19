@@ -41,7 +41,6 @@ import frc.robot.subsystems.ElevatorSubsystem;
 import frc.robot.subsystems.EndEffectorSubsystem;
 import frc.robot.subsystems.IntakeRangeSubsystem;
 import frc.robot.subsystems.IntakeRollersSubsystems;
-import frc.robot.subsystems.LimelightSubsystem;
 
 public class RobotContainer {
     private final ElevatorSubsystem elevator = new ElevatorSubsystem();
@@ -51,7 +50,6 @@ public class RobotContainer {
     private final EECoralRangeSubsystem eeCoral = new EECoralRangeSubsystem();
     private final AlgaeDetectRangeSubsystem algaeDetect = new AlgaeDetectRangeSubsystem();
     private final IntakeRangeSubsystem intakeRange = new IntakeRangeSubsystem();
-    private final LimelightSubsystem limelight = new LimelightSubsystem();  // ✅ Added here
     private final SendableChooser<Command> autoChooser;
 
     private RobotMode selectedMode = RobotMode.NONE;
@@ -164,7 +162,7 @@ public class RobotContainer {
         );
 
         joystick.rightBumper().onTrue(
-            drivetrain.autoAlign(drivetrain.getNearestReefPose())
+            drivetrain.autoAlign(drivetrain.getLeftReefPose())
         );
 
 

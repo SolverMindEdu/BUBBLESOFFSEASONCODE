@@ -16,6 +16,7 @@ import com.pathplanner.lib.controllers.PPHolonomicDriveController;
 import com.pathplanner.lib.path.PathConstraints;
 
 import edu.wpi.first.math.Matrix;
+import edu.wpi.first.math.VecBuilder;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.math.kinematics.ChassisSpeeds;
@@ -25,6 +26,7 @@ import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.DriverStation.Alliance;
 import edu.wpi.first.wpilibj.Notifier;
 import edu.wpi.first.wpilibj.RobotController;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Subsystem;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
@@ -33,7 +35,7 @@ import java.util.Arrays;
 import edu.wpi.first.apriltag.AprilTagFieldLayout;
 import edu.wpi.first.apriltag.AprilTagFields;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-
+import frc.robot.LimelightHelpers;
 import frc.robot.generated.TunerConstants.TunerSwerveDrivetrain;
 
 /**
@@ -60,21 +62,43 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     private final AprilTagFieldLayout aprilTagFieldLayout = AprilTagFields.k2025ReefscapeAndyMark.loadAprilTagLayoutField();
     private int aprilID;
 
-    // Scoring positions - adjust these coordinates for your field
-    private final Pose2d[] scoringPositionsBlue = {
-        new Pose2d(1.5, 1.0, Rotation2d.fromDegrees(0)),   // L1 Blue
-        new Pose2d(1.5, 2.0, Rotation2d.fromDegrees(0)),   // L2 Blue  
-        new Pose2d(1.5, 3.0, Rotation2d.fromDegrees(0)),   // L3 Blue
-        new Pose2d(1.5, 4.0, Rotation2d.fromDegrees(0))    // L4 Blue
-    };
+    // // Scoring positions - adjust these coordinates for your field
+    // private final Pose2d[] scoringPositionsBlue = {
+    //     new Pose2d(1.5, 1.0, Rotation2d.fromDegrees(0)), 
+    //     new Pose2d(1.5, 2.0, Rotation2d.fromDegrees(0)), 
+    //     new Pose2d(1.5, 3.0, Rotation2d.fromDegrees(0)), 
+    //     new Pose2d(1.5, 4.0, Rotation2d.fromDegrees(0))
+    // };
 
-    private final Pose2d[] scoringPositionsRed = {
-        new Pose2d(20, -14, Rotation2d.fromDegrees(180)), // L1 Red
-        new Pose2d(20, -14, Rotation2d.fromDegrees(180)), // L2 Red
-        new Pose2d(20, -14, Rotation2d.fromDegrees(180)), // L3 Red  
-        new Pose2d(20, -14, Rotation2d.fromDegrees(180))  // L4 Red
-    };
+    // private final Pose2d[] scoringPositionsRed = {
+    //     new Pose2d(20, -14, Rotation2d.fromDegrees(0)),
+    //     new Pose2d(20, -14, Rotation2d.fromDegrees(0)),
+    //     new Pose2d(20, -14, Rotation2d.fromDegrees(0)), 
+    //     new Pose2d(20, -14, Rotation2d.fromDegrees(0))
+    // };
 
+    public Pose2d getLeftReefPose() {
+        if (isRedAlliance()) {
+            // Red alliance left reef position (adjust these coordinates for your field)
+            return new Pose2d(20, -14, Rotation2d.fromDegrees(0));
+        } else {
+            // Blue alliance left reef position (adjust these coordinates for your field)
+            return new Pose2d(3.5, 5.5, Rotation2d.fromDegrees(30));
+        }
+    }
+    
+    /**
+     * Get right side reef position based on alliance
+     */
+    public Pose2d getRightReefPose() {
+        if (isRedAlliance()) {
+            // Red alliance right reef position (adjust these coordinates for your field)
+            return new Pose2d(20, -14, Rotation2d.fromDegrees(0));
+        } else {
+            // Blue alliance right reef position (adjust these coordinates for your field)
+            return new Pose2d(3.5, 2.5, Rotation2d.fromDegrees(-30));
+        }
+    }
 
     /* SysId routine for characterizing translation. This is used to find PID gains for the drive motors. */
     private final SysIdRoutine m_sysIdRoutineTranslation = new SysIdRoutine(
@@ -307,6 +331,45 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
                 m_hasAppliedOperatorPerspective = true;
             });
         }
+        // updateMegaTag2();
+    }
+
+    private void updateMegaTag2() {
+        // Tell Limelight our robot's current orientation
+        LimelightHelpers.SetRobotOrientation("limelight", 
+            getState().Pose.getRotation().getDegrees(), 
+            0, 0, 0, 0, 0);
+        
+        // Get MegaTag2 pose estimate
+        LimelightHelpers.PoseEstimate mt2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
+        
+        boolean doRejectUpdate = false;
+        
+        // Reject if no tags visible
+        if (mt2.tagCount == 0) {
+            doRejectUpdate = true;
+        }
+        
+        // Reject if we're spinning too fast
+        if (Math.abs(getState().Speeds.omegaRadiansPerSecond) > Math.toRadians(360)) {
+            doRejectUpdate = true;
+        }
+        
+        // Reject if pose is too far from current estimate (likely bad measurement)
+        Pose2d currentPose = getState().Pose;
+        double distanceFromCurrent = currentPose.getTranslation().getDistance(mt2.pose.getTranslation());
+        if (distanceFromCurrent > 2.0) { // More than 2 meters away = probably bad
+            doRejectUpdate = true;
+            SmartDashboard.putString("Vision Status", "Rejected: Too far (" + String.format("%.2f", distanceFromCurrent) + "m)");
+        }
+        
+        // Only update if we have good data
+        if (!doRejectUpdate) {
+            // Use conservative standard deviations
+            setVisionMeasurementStdDevs(VecBuilder.fill(1.0, 1.0, 9999999));
+            addVisionMeasurement(mt2.pose, mt2.timestampSeconds);
+            SmartDashboard.putString("Vision Status", "Updated with " + mt2.tagCount + " tags");
+        }
     }
 
     private void startSimThread() {
@@ -361,12 +424,12 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         /**
      * Get the nearest scoring position based on current robot position
      */
-    public Pose2d getNearestScoringPose() {
-        Pose2d[] targetPoses = isRedAlliance() ? scoringPositionsRed : scoringPositionsBlue;
-        Pose2d nearestPose = getPose().nearest(Arrays.asList(targetPoses));
-        SmartDashboard.putString("Nearest Scoring Pose", nearestPose.toString());
-        return nearestPose;
-    }
+    // public Pose2d getNearestScoringPose() {
+    //     Pose2d[] targetPoses = isRedAlliance() ? scoringPositionsRed : scoringPositionsBlue;
+    //     Pose2d nearestPose = getPose().nearest(Arrays.asList(targetPoses));
+    //     SmartDashboard.putString("Nearest Scoring Pose", nearestPose.toString());
+    //     return nearestPose;
+    // }
 
     /**
      * Get the nearest AprilTag reef pose
