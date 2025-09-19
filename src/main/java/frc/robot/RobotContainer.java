@@ -6,6 +6,8 @@ package frc.robot;
 
 import static edu.wpi.first.units.Units.*;
 
+import java.util.Set;
+
 import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 import com.pathplanner.lib.auto.AutoBuilder;
@@ -16,6 +18,8 @@ import com.pathplanner.lib.controllers.PPHolonomicDriveController;
 import edu.wpi.first.math.geometry.Pose2d;
 import edu.wpi.first.math.geometry.Rotation2d;
 import edu.wpi.first.wpilibj.DriverStation;
+import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
@@ -23,7 +27,6 @@ import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.RobotModeTriggers;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
 import frc.robot.commands.AlgaePivotCommands;
-import frc.robot.commands.AutoAlignToPose;
 import frc.robot.commands.ElevatorCommands;
 import frc.robot.commands.EndEffectorCommands;
 import frc.robot.commands.IntakeRollersCommands;
@@ -49,6 +52,7 @@ public class RobotContainer {
     private final AlgaeDetectRangeSubsystem algaeDetect = new AlgaeDetectRangeSubsystem();
     private final IntakeRangeSubsystem intakeRange = new IntakeRangeSubsystem();
     private final LimelightSubsystem limelight = new LimelightSubsystem();  // ✅ Added here
+    private final SendableChooser<Command> autoChooser;
 
     private RobotMode selectedMode = RobotMode.NONE;
     private int modeStep = 0;
@@ -72,30 +76,9 @@ public class RobotContainer {
     public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
 
     public RobotContainer() {
-        RobotConfig config;
-        try {
-            config = RobotConfig.fromGUISettings();
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new RuntimeException("PathPlanner RobotConfig not found! Did you export it?");
-        }
-
-        // --- Configure AutoBuilder ---
-        AutoBuilder.configure(
-            drivetrain::getPose,                // Pose2d supplier
-            drivetrain::resetPose,              // Resets odometry
-            drivetrain::getRobotRelativeSpeeds, // Supplier of ChassisSpeeds (robot-relative)
-            drivetrain::driveRobotRelative,     // Consumes ChassisSpeeds (robot-relative)
-            new PPHolonomicDriveController(
-                new PIDConstants(4.0, 0.0, 0.0), // Translation PID
-                new PIDConstants(4.0, 0.0, 0.0)  // Rotation PID
-            ),
-            config, // RobotConfig exported from GUI
-            () -> DriverStation.getAlliance().isPresent() &&
-                DriverStation.getAlliance().get() == DriverStation.Alliance.Red, // mirror paths
-            drivetrain // subsystem requirement
-        );
         configureBindings();
+        autoChooser = AutoBuilder.buildAutoChooser();
+        SmartDashboard.putData("Auto Chooser", autoChooser);
     }
 
     private void configureBindings() {
@@ -104,8 +87,8 @@ public class RobotContainer {
         drivetrain.setDefaultCommand(
             // Drivetrain will execute this command periodically
             drivetrain.applyRequest(() ->
-                drive.withVelocityX(-joystick.getLeftY() * MaxSpeed * -SetMax) // Drive forward with negative Y (forward)
-                    .withVelocityY(-joystick.getLeftX() * MaxSpeed * -SetMax) // Drive left with negative X (left)
+                drive.withVelocityX(-joystick.getLeftY() * MaxSpeed * SetMax) // Drive forward with negative Y (forward)
+                    .withVelocityY(-joystick.getLeftX() * MaxSpeed * SetMax) // Drive left with negative X (left)
                     .withRotationalRate(-joystick.getRightX() * MaxAngularRate) // Drive counterclockwise with negative X (left)
             )
         );
@@ -180,16 +163,17 @@ public class RobotContainer {
             })
         );
 
-        // joystick.rightBumper().onTrue(
-        //     AutoAlignToPose.create(limelight, drivetrain, -15.4, -13.9, 3.7, 0.2)
-        // );
-
         joystick.rightBumper().onTrue(
-            AutoAlignToPose.create(
-                drivetrain,
-                new Pose2d(-22.0, -16.7, new Rotation2d(Math.PI)) // Example pose (x=3m, y=4m, facing 180°)
-            )
+            drivetrain.autoAlign(drivetrain.getNearestReefPose())
         );
+
+
+        // joystick.rightBumper().onTrue(
+        //     AutoAlignToPose.create(
+        //         drivetrain,
+        //         new Pose2d(-22.0, -16.7, new Rotation2d(Math.PI)) // Example pose (x=3m, y=4m, facing 180°)
+        //     )
+        // );
 
 
         joystick.rightTrigger().onTrue(
@@ -382,7 +366,7 @@ public class RobotContainer {
         //         Commands.waitSeconds(3),
         //         EndEffectorCommands.run(endEffector, 0.6)
         //     )
-        // );
+            // );
 
         // joystick.a().onTrue(
         //     Commands.sequence(
@@ -415,6 +399,6 @@ public class RobotContainer {
     }
 
     public Command getAutonomousCommand() {
-        return Commands.print("No autonomous command configured");
+        return autoChooser.getSelected();
     }
 }

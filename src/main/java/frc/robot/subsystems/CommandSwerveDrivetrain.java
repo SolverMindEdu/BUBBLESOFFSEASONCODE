@@ -10,6 +10,9 @@ import com.ctre.phoenix6.swerve.SwerveDrivetrainConstants;
 import com.ctre.phoenix6.swerve.SwerveModuleConstants;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.config.PIDConstants;
+import com.pathplanner.lib.config.RobotConfig;
+import com.pathplanner.lib.controllers.PPHolonomicDriveController;
 import com.pathplanner.lib.path.PathConstraints;
 
 import edu.wpi.first.math.Matrix;
@@ -25,6 +28,11 @@ import edu.wpi.first.wpilibj.RobotController;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Subsystem;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
+import java.util.ArrayList;
+import java.util.Arrays;
+import edu.wpi.first.apriltag.AprilTagFieldLayout;
+import edu.wpi.first.apriltag.AprilTagFields;
+import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 
 import frc.robot.generated.TunerConstants.TunerSwerveDrivetrain;
 
@@ -48,8 +56,24 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     private final SwerveRequest.SysIdSwerveTranslation m_translationCharacterization = new SwerveRequest.SysIdSwerveTranslation();
     private final SwerveRequest.SysIdSwerveSteerGains m_steerCharacterization = new SwerveRequest.SysIdSwerveSteerGains();
     private final SwerveRequest.SysIdSwerveRotation m_rotationCharacterization = new SwerveRequest.SysIdSwerveRotation();
+    // Add these after your existing fields like m_sysIdRoutineToApply
+    private final AprilTagFieldLayout aprilTagFieldLayout = AprilTagFields.k2025ReefscapeAndyMark.loadAprilTagLayoutField();
+    private int aprilID;
 
-    private static final double MAX_ANGULAR_VELOCITY = Math.PI * 1;
+    // Scoring positions - adjust these coordinates for your field
+    private final Pose2d[] scoringPositionsBlue = {
+        new Pose2d(1.5, 1.0, Rotation2d.fromDegrees(0)),   // L1 Blue
+        new Pose2d(1.5, 2.0, Rotation2d.fromDegrees(0)),   // L2 Blue  
+        new Pose2d(1.5, 3.0, Rotation2d.fromDegrees(0)),   // L3 Blue
+        new Pose2d(1.5, 4.0, Rotation2d.fromDegrees(0))    // L4 Blue
+    };
+
+    private final Pose2d[] scoringPositionsRed = {
+        new Pose2d(20, -14, Rotation2d.fromDegrees(180)), // L1 Red
+        new Pose2d(20, -14, Rotation2d.fromDegrees(180)), // L2 Red
+        new Pose2d(20, -14, Rotation2d.fromDegrees(180)), // L3 Red  
+        new Pose2d(20, -14, Rotation2d.fromDegrees(180))  // L4 Red
+    };
 
 
     /* SysId routine for characterizing translation. This is used to find PID gains for the drive motors. */
@@ -129,6 +153,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         SwerveModuleConstants<?, ?, ?>... modules
     ) {
         super(drivetrainConstants, modules);
+        configureAutoBuilder();
         if (Utils.isSimulation()) {
             startSimThread();
         }
@@ -153,6 +178,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         SwerveModuleConstants<?, ?, ?>... modules
     ) {
         super(drivetrainConstants, odometryUpdateFrequency, modules);
+        configureAutoBuilder();
         if (Utils.isSimulation()) {
             startSimThread();
         }
@@ -185,9 +211,49 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         SwerveModuleConstants<?, ?, ?>... modules
     ) {
         super(drivetrainConstants, odometryUpdateFrequency, odometryStandardDeviation, visionStandardDeviation, modules);
+        configureAutoBuilder();
         if (Utils.isSimulation()) {
             startSimThread();
         }
+    }
+
+    public Pose2d getPose() {
+        return getState().Pose;
+    }    
+
+    public ChassisSpeeds getRobotRelativeSpeeds() {
+        return getState().Speeds;
+    }
+
+    public void driveRobotRelative(ChassisSpeeds speeds) {
+        setControl(new SwerveRequest.ApplyChassisSpeeds().withSpeeds(speeds));
+    }
+
+    private void configureAutoBuilder() {
+        RobotConfig config;
+        try {
+            config = RobotConfig.fromGUISettings();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return;
+        }
+        
+        AutoBuilder.configure(
+            this::getPose,
+            this::resetPose,
+            this::getRobotRelativeSpeeds,
+            (speeds, feedforwards) -> driveRobotRelative(speeds),
+            new PPHolonomicDriveController(
+                new PIDConstants(5.0, 0.0, 0.0), // Translation PID
+                new PIDConstants(5.0, 0.0, 0.0)  // Rotation PID
+            ),
+            config,
+            () -> {
+                var alliance = DriverStation.getAlliance();
+                return alliance.isPresent() && alliance.get() == DriverStation.Alliance.Red;
+            },
+            this
+        );
     }
 
     /**
@@ -292,6 +358,98 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         super.addVisionMeasurement(visionRobotPoseMeters, Utils.fpgaToCurrentTime(timestampSeconds), visionMeasurementStdDevs);
     }
 
+        /**
+     * Get the nearest scoring position based on current robot position
+     */
+    public Pose2d getNearestScoringPose() {
+        Pose2d[] targetPoses = isRedAlliance() ? scoringPositionsRed : scoringPositionsBlue;
+        Pose2d nearestPose = getPose().nearest(Arrays.asList(targetPoses));
+        SmartDashboard.putString("Nearest Scoring Pose", nearestPose.toString());
+        return nearestPose;
+    }
+
+    /**
+     * Get the nearest AprilTag reef pose
+     */
+    public Pose2d getNearestReefPose() {
+        int initTag;
+        int endTag;
+        ArrayList<Pose2d> reefTagPoses = new ArrayList<Pose2d>(6);
+        
+        if (isRedAlliance()) {
+            initTag = 6;
+            endTag = 12;
+        } else {
+            initTag = 17; 
+            endTag = 23;
+        }
+        
+        // Get poses of reef april tags based on alliance
+        for (int i = initTag; i < endTag; i++) {
+            if (aprilTagFieldLayout.getTagPose(i).isPresent()) {
+                reefTagPoses.add(aprilTagFieldLayout.getTagPose(i).get().toPose2d());
+            }
+        }
+        
+        if (reefTagPoses.isEmpty()) {
+            return getPose(); // Return current pose if no tags found
+        }
+        
+        // Find nearest reef tag
+        Pose2d nearestPose = new Pose2d(
+            getPose().nearest(reefTagPoses).getTranslation(),
+            getPose().nearest(reefTagPoses).getRotation().rotateBy(Rotation2d.k180deg)
+        );
+        
+        aprilID = reefTagPoses.indexOf(nearestPose) + (isRedAlliance() ? 6 : 17);
+        SmartDashboard.putNumber("AprilTag ID", aprilID);
+        SmartDashboard.putString("Nearest Reef Pose", nearestPose.toString());
+        
+        // Apply chassis offset
+        double chassisOffset = 0.5; // meters - adjust for your robot
+        double angle = nearestPose.getRotation().getRadians();
+        
+        return new Pose2d(
+            nearestPose.getX() - chassisOffset * Math.cos(angle),
+            nearestPose.getY() + -chassisOffset * Math.sin(angle), 
+            nearestPose.getRotation()
+        );
+    }
+    
+    /**
+     * Drive to a specific pose using PathPlanner
+     * @param pose Target pose to drive to
+     * @return Command that drives to the pose
+     */
+    public Command driveToPose(Pose2d pose) {
+        PathConstraints constraints = new PathConstraints(
+            2.0, 2.0,                    // max velocity and acceleration (m/s, m/s^2)
+            Math.toRadians(360),         // max angular velocity (rad/s)
+            Math.toRadians(720)          // max angular acceleration (rad/s^2)
+        );
+        
+        return AutoBuilder.pathfindToPose(
+            pose,
+            constraints,
+            edu.wpi.first.units.Units.MetersPerSecond.of(0) // end velocity = 0
+        );
+    }
+
+    /**
+     * Auto-align command - drives to the specified pose
+     */
+    public Command autoAlign(Pose2d pose) {
+        return driveToPose(pose);
+    }
+
+    /**
+     * Check if we're on red alliance
+     */
+    private boolean isRedAlliance() {
+        var alliance = DriverStation.getAlliance();
+        return alliance.isPresent() && alliance.get() == DriverStation.Alliance.Red;
+    }
+
     // public Command driveToPose(Pose2d pose) {
     //     PathConstraints constraints = new PathConstraints(
     //         2.5, 2.5, // max linear velocity and accel (m/s, m/s^2)
@@ -306,34 +464,34 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     //     );
     // }
 
-    public Pose2d getPose() {
-        return getState().Pose;
-    }
+    // public Pose2d getPose() {
+    //     return getState().Pose;
+    // }
     
-    public void resetPose(Pose2d pose) {
-        super.resetPose(pose);
-    }
+    // public void resetPose(Pose2d pose) {
+    //     super.resetPose(pose);
+    // }
     
     
-    public ChassisSpeeds getRobotRelativeSpeeds() {
-        return getState().Speeds;
-    }
+    // public ChassisSpeeds getRobotRelativeSpeeds() {
+    //     return getState().Speeds;
+    // }
     
-    public void driveRobotRelative(ChassisSpeeds speeds) {
-        setControl(new SwerveRequest.ApplyChassisSpeeds().withSpeeds(speeds));
-    }
+    // public void driveRobotRelative(ChassisSpeeds speeds) {
+    //     setControl(new SwerveRequest.ApplyChassisSpeeds().withSpeeds(speeds));
+    // }
     
-    public Command driveToPose(Pose2d pose) {
-        PathConstraints constraints = new PathConstraints(
-            1.5, 1.5,               // max linear velocity and accel (m/s, m/s^2)
-            MAX_ANGULAR_VELOCITY,   // max angular velocity (rad/s)
-            Math.toRadians(720)     // max angular accel (rad/s^2)
-        );
+    // public Command driveToPose(Pose2d pose) {
+    //     PathConstraints constraints = new PathConstraints(
+    //         1.5, 1.5,               // max linear velocity and accel (m/s, m/s^2)
+    //         MAX_ANGULAR_VELOCITY,   // max angular velocity (rad/s)
+    //         Math.toRadians(720)     // max angular accel (rad/s^2)
+    //     );
     
-        return AutoBuilder.pathfindToPose(
-            pose,
-            constraints,
-            edu.wpi.first.units.Units.MetersPerSecond.of(0) // end velocity = 0
-        );
-    }
+    //     return AutoBuilder.pathfindToPose(
+    //         pose,
+    //         constraints,
+    //         edu.wpi.first.units.Units.MetersPerSecond.of(0) // end velocity = 0
+    //     );
+    // }
 }
