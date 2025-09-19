@@ -310,8 +310,9 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     }
     
     public void resetPose(Pose2d pose) {
-        this.resetPosition(pose);
+        super.resetPose(pose);
     }
+    
     
     public ChassisSpeeds getRobotRelativeSpeeds() {
         return getState().Speeds;

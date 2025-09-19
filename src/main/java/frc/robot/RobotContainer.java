@@ -86,8 +86,8 @@ public class RobotContainer {
             drivetrain::getRobotRelativeSpeeds, // Supplier of ChassisSpeeds (robot-relative)
             drivetrain::driveRobotRelative,     // Consumes ChassisSpeeds (robot-relative)
             new PPHolonomicDriveController(
-                new PIDConstants(5.0, 0.0, 0.0), // Translation PID
-                new PIDConstants(5.0, 0.0, 0.0)  // Rotation PID
+                new PIDConstants(4.0, 0.0, 0.0), // Translation PID
+                new PIDConstants(4.0, 0.0, 0.0)  // Rotation PID
             ),
             config, // RobotConfig exported from GUI
             () -> DriverStation.getAlliance().isPresent() &&
@@ -155,7 +155,7 @@ public class RobotContainer {
             })
         );
 
-        opjoystick.leftTrigger().and(opjoystick.x()).onTrue(
+        opjoystick.rightTrigger().and(opjoystick.x()).onTrue(
             new InstantCommand(() -> {
                 selectedMode = RobotMode.ALGAE1;
                 modeStep = 0;
@@ -170,7 +170,7 @@ public class RobotContainer {
         joystick.rightBumper().onTrue(
             AutoAlignToPose.create(
                 drivetrain,
-                new Pose2d(3.0, 4.0, new Rotation2d(Math.PI)) // Example pose (x=3m, y=4m, facing 180°)
+                new Pose2d(-22.0, -16.7, new Rotation2d(Math.PI)) // Example pose (x=3m, y=4m, facing 180°)
             )
         );
 
