@@ -7,6 +7,8 @@ public enum RobotMode {
     SCORE_L1,
     SCORE_L2,
     SCORE_L3,
+    SCORE_L4,
     ALGAE1,
-    ALGAE2
+    ALGAE2,
+    PROCESSOR
 }

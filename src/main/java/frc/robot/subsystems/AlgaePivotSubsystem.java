@@ -20,7 +20,8 @@ public class AlgaePivotSubsystem extends SubsystemBase {
     public static final double RESET = 0;
     public static final double intakeMove = 2;
     public static final double ElevatorMove = 0.9;
-    public static final double Algae = 18;
+    public static final double Algae = 6;
+    public static final double Process = 5;
 
     public AlgaePivotSubsystem() {
         TalonFXConfiguration configs = new TalonFXConfiguration();

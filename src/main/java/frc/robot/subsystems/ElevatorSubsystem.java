@@ -20,7 +20,7 @@ public class ElevatorSubsystem extends SubsystemBase {
 
     // Positions in rotations
     public static final double Reset  = 0.2;
-    public static final double Intake = 1.5;
+    public static final double Intake = 1.1;
     public static final double LEVEL1 = 12.0;
     public static final double LEVEL2 = 20.0;
     public static final double LEVEL3 = 31.0;

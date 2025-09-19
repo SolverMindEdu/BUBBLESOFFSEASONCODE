@@ -27,6 +27,7 @@ import frc.robot.commands.AutoAlignToPose;
 import frc.robot.commands.ElevatorCommands;
 import frc.robot.commands.EndEffectorCommands;
 import frc.robot.commands.IntakeRollersCommands;
+import frc.robot.commands.RunEndEffectorCommand;
 import frc.robot.commands.SensorRangeCommands;
 import frc.robot.generated.TunerConstants;
 import frc.robot.subsystems.AlgaeDetectRangeSubsystem;
@@ -52,7 +53,7 @@ public class RobotContainer {
     private RobotMode selectedMode = RobotMode.NONE;
     private int modeStep = 0;
 
-    private double SetMax = 0.5;
+    private double SetMax = 0.4;
     private double MaxSpeed = TunerConstants.kSpeedAt12Volts.in(MetersPerSecond); // kSpeedAt12Volts desired top speed
     private double MaxAngularRate = RotationsPerSecond.of(0.5).in(RadiansPerSecond); // 3/4 of a rotation per second max angular velocity
 
@@ -155,11 +156,27 @@ public class RobotContainer {
             })
         );
 
+        opjoystick.b().onTrue(
+            new InstantCommand(() -> {
+                selectedMode = RobotMode.SCORE_L4;
+                modeStep = 0;
+                System.out.println("Mode set to SCORE_L4-");
+            })
+        );
+
         opjoystick.rightTrigger().and(opjoystick.x()).onTrue(
             new InstantCommand(() -> {
                 selectedMode = RobotMode.ALGAE1;
                 modeStep = 0;
                 System.out.println("Mode set to Algae1-");
+            })
+        );
+
+        opjoystick.rightTrigger().and(opjoystick.b()).onTrue(
+            new InstantCommand(() -> {
+                selectedMode = RobotMode.PROCESSOR;
+                modeStep = 0;
+                System.out.println("Mode set to Processor-");
             })
         );
 
@@ -202,15 +219,25 @@ public class RobotContainer {
                             Commands.waitSeconds(0.1),
                             ElevatorCommands.Algae1(elevator),
                             AlgaePivotCommands.algae(algaepivot),
-                            EndEffectorCommands.run(endEffector, 0.3),
-                            SensorRangeCommands.waitForAlgae(algaeDetect, 0, 5),
-                            Commands.waitSeconds(0.15),
-                            EndEffectorCommands.stop(endEffector),
+                            EndEffectorCommands.run(endEffector, 0.4),
+                            SensorRangeCommands.waitForAlgae(algaeDetect, 0, 70),
+                            Commands.waitSeconds(1),
                             AlgaePivotCommands.elevatorMove(algaepivot),
                             ElevatorCommands.reset(elevator),
-                            AlgaePivotCommands.stow(algaepivot)
+                            AlgaePivotCommands.stow(algaepivot),
+                            EndEffectorCommands.run(endEffector, 0.08)
                         ).schedule();
                         break;
+
+                    case PROCESSOR:
+                        Commands.sequence(
+                            AlgaePivotCommands.process(algaepivot),
+                            EndEffectorCommands.run(endEffector, -0.3),
+                            Commands.waitSeconds(1),
+                            EndEffectorCommands.stop(endEffector),
+                            AlgaePivotCommands.stow(algaepivot)
+                        ).schedule();
+                        break;                
 
                     case SCORE_L1:
                         Commands.sequence(
@@ -275,6 +302,40 @@ public class RobotContainer {
                                     AlgaePivotCommands.stow(algaepivot)
                                 ).schedule();
                                 System.out.println("SCORE_L3 Step 1 done, press RT for Step 2");
+                                modeStep++;
+                                break;
+        
+                            case 1:
+                                Commands.sequence(
+                                    EndEffectorCommands.run(endEffector, 0.6),
+                                    Commands.waitSeconds(0.8),
+                                    EndEffectorCommands.stop(endEffector),
+                                    AlgaePivotCommands.elevatorMove(algaepivot),
+                                    ElevatorCommands.reset(elevator),
+                                    AlgaePivotCommands.stow(algaepivot)
+                                ).schedule();
+                                System.out.println("SCORE_L3 Step 2 done, sequence complete");
+                                modeStep = 0; // reset steps
+                                break;
+        
+                            default:
+                                modeStep = 0;
+                                break;
+                        }
+                        break;
+
+                    case SCORE_L4:
+                        switch (modeStep) {
+                            case 0:
+                                // Step 1: Get ready at scoring position
+                                Commands.sequence(
+                                    SensorRangeCommands.waitForCoral(eeCoral, 0, 100),
+                                    AlgaePivotCommands.elevatorMove(algaepivot),
+                                    Commands.waitSeconds(0.1),
+                                    ElevatorCommands.goToLevel4(elevator),
+                                    AlgaePivotCommands.stow(algaepivot)
+                                ).schedule();
+                                System.out.println("SCORE_L4 Step 1 done, press RT for Step 2");
                                 modeStep++;
                                 break;
         

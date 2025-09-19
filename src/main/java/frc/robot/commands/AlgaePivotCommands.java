@@ -20,6 +20,10 @@ public class AlgaePivotCommands {
         return new InstantCommand(() -> algae.setPosition(AlgaePivotSubsystem.Algae), algae);
     }
 
+    public static InstantCommand process(AlgaePivotSubsystem algae) {
+        return new InstantCommand(() -> algae.setPosition(AlgaePivotSubsystem.Process), algae);
+    }
+
     public static InstantCommand stop(AlgaePivotSubsystem algae) {
         return new InstantCommand(algae::stop, algae);
     }
