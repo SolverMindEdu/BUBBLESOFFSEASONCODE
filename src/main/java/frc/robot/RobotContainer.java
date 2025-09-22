@@ -6,11 +6,15 @@ package frc.robot;
 
 import static edu.wpi.first.units.Units.*;
 
+import java.io.SequenceInputStream;
 import java.util.Set;
+
+import javax.sound.midi.Sequence;
 
 import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
 import com.ctre.phoenix6.swerve.SwerveRequest;
 import com.pathplanner.lib.auto.AutoBuilder;
+import com.pathplanner.lib.auto.NamedCommands;
 import com.pathplanner.lib.config.PIDConstants;
 import com.pathplanner.lib.config.RobotConfig;
 import com.pathplanner.lib.controllers.PPHolonomicDriveController;
@@ -23,6 +27,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.Commands;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
+import edu.wpi.first.wpilibj2.command.ParallelCommandGroup;
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 import edu.wpi.first.wpilibj2.command.button.RobotModeTriggers;
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine.Direction;
@@ -30,6 +35,7 @@ import frc.robot.commands.AlgaePivotCommands;
 import frc.robot.commands.ElevatorCommands;
 import frc.robot.commands.EndEffectorCommands;
 import frc.robot.commands.IntakeRollersCommands;
+import frc.robot.commands.LimelightLineupCommand;
 import frc.robot.commands.RunEndEffectorCommand;
 import frc.robot.commands.SensorRangeCommands;
 import frc.robot.generated.TunerConstants;
@@ -41,6 +47,7 @@ import frc.robot.subsystems.ElevatorSubsystem;
 import frc.robot.subsystems.EndEffectorSubsystem;
 import frc.robot.subsystems.IntakeRangeSubsystem;
 import frc.robot.subsystems.IntakeRollersSubsystems;
+import frc.robot.commands.LimelightLineupCommand;
 
 public class RobotContainer {
     private final ElevatorSubsystem elevator = new ElevatorSubsystem();
@@ -55,7 +62,7 @@ public class RobotContainer {
     private RobotMode selectedMode = RobotMode.NONE;
     private int modeStep = 0;
 
-    private double SetMax = 0.4;
+    private double SetMax = 0.8;
     private double MaxSpeed = TunerConstants.kSpeedAt12Volts.in(MetersPerSecond); // kSpeedAt12Volts desired top speed
     private double MaxAngularRate = RotationsPerSecond.of(0.5).in(RadiansPerSecond); // 3/4 of a rotation per second max angular velocity
 
@@ -75,11 +82,25 @@ public class RobotContainer {
 
     public RobotContainer() {
         configureBindings();
+        NamedCommands.registerCommand("ElevatorL4", ElevatorCommands.goToLevel4(elevator));
+        NamedCommands.registerCommand("ElevatorIntake", ElevatorCommands.intake(elevator));
+        NamedCommands.registerCommand("RunEE", EndEffectorCommands.run(endEffector, 0.6));
+        NamedCommands.registerCommand("IntakeRunEE", EndEffectorCommands.run(endEffector, 0.3));
+        NamedCommands.registerCommand("StopEE", EndEffectorCommands.stop(endEffector));
+        NamedCommands.registerCommand("ResetELEVATOR", ElevatorCommands.reset(elevator));
+        NamedCommands.registerCommand("AutoAlignLeft", LimelightLineupCommand.leftSide(drivetrain, joystick).withTimeout(1));
+        NamedCommands.registerCommand("SlowIntakeRollers", IntakeRollersCommands.run(intakeRollers, 0.15));
+        NamedCommands.registerCommand("IntakeRollers", IntakeRollersCommands.run(intakeRollers, 0.55));
+        NamedCommands.registerCommand("StopIntakeRollers", IntakeRollersCommands.stop(intakeRollers));
+        NamedCommands.registerCommand("IntakeSensor", SensorRangeCommands.waitForIntake(intakeRange, 0, 280));
+        NamedCommands.registerCommand("EESensor", SensorRangeCommands.waitForCoral(eeCoral, 0, 100));
+        NamedCommands.registerCommand("AlgaeStow", AlgaePivotCommands.stow(algaepivot));
         autoChooser = AutoBuilder.buildAutoChooser();
         SmartDashboard.putData("Auto Chooser", autoChooser);
     }
 
     private void configureBindings() {
+       
         // Note that X is defined as forward according to WPILib convention,
         // and Y is defined as to the left according to WPILib convention.
         drivetrain.setDefaultCommand(
@@ -106,7 +127,7 @@ public class RobotContainer {
         joystick.start().and(joystick.x()).whileTrue(drivetrain.sysIdQuasistatic(Direction.kReverse));
 
         // reset the field-centric heading on left bumper press
-        joystick.leftBumper().onTrue(drivetrain.runOnce(() -> drivetrain.seedFieldCentric()));
+        joystick.leftTrigger().onTrue(drivetrain.runOnce(() -> drivetrain.seedFieldCentric()));
 
         // Operator selects mode
         opjoystick.rightTrigger().onTrue(
@@ -153,6 +174,14 @@ public class RobotContainer {
             })
         );
 
+        opjoystick.rightTrigger().and(opjoystick.y()).onTrue(
+            new InstantCommand(() -> {
+                selectedMode = RobotMode.ALGAE2;
+                modeStep = 0;
+                System.out.println("Mode set to Algae2-");
+            })
+        );
+
         opjoystick.rightTrigger().and(opjoystick.b()).onTrue(
             new InstantCommand(() -> {
                 selectedMode = RobotMode.PROCESSOR;
@@ -162,9 +191,57 @@ public class RobotContainer {
         );
 
         joystick.rightBumper().onTrue(
-            drivetrain.autoAlign(drivetrain.getLeftReefPose())
+            LimelightLineupCommand.rightSide(drivetrain, joystick)
         );
 
+        joystick.leftBumper().onTrue(
+            LimelightLineupCommand.leftSide(drivetrain, joystick)
+        );
+
+        joystick.a().onTrue(
+            new ParallelCommandGroup(
+                new InstantCommand(() -> selectedMode = RobotMode.INTAKE),
+                AlgaePivotCommands.stow(algaepivot),
+                ElevatorCommands.reset(elevator),
+                IntakeRollersCommands.stop(intakeRollers),
+                EndEffectorCommands.stop(endEffector)
+            )
+        );
+
+        joystick.b().onTrue(
+            new ParallelCommandGroup(
+                new InstantCommand(() -> selectedMode = RobotMode.INTAKE),
+                AlgaePivotCommands.stow(algaepivot),
+                ElevatorCommands.reset(elevator),
+                IntakeRollersCommands.run(intakeRollers, -0.6),
+                EndEffectorCommands.stop(endEffector)
+            )
+        );
+
+        joystick.x().onTrue(
+            new ParallelCommandGroup(
+                new InstantCommand(() -> selectedMode = RobotMode.INTAKE),
+                AlgaePivotCommands.stow(algaepivot),
+                ElevatorCommands.reset(elevator),
+                IntakeRollersCommands.stop(intakeRollers),
+                EndEffectorCommands.run(endEffector, 0.2)
+            )
+        );
+
+        joystick.y().whileTrue(
+            Commands.sequence(
+                AlgaePivotCommands.intakeMove(algaepivot),
+                IntakeRollersCommands.run(intakeRollers, 0.25),
+                EndEffectorCommands.run(endEffector, 0.15)
+            )
+        );
+
+        joystick.y().whileFalse(
+            Commands.sequence(
+                IntakeRollersCommands.stop(intakeRollers),
+                EndEffectorCommands.stop(endEffector)
+            )
+        );
 
         // joystick.rightBumper().onTrue(
         //     AutoAlignToPose.create(
@@ -201,13 +278,29 @@ public class RobotContainer {
                             Commands.waitSeconds(0.1),
                             ElevatorCommands.Algae1(elevator),
                             AlgaePivotCommands.algae(algaepivot),
-                            EndEffectorCommands.run(endEffector, 0.4),
-                            SensorRangeCommands.waitForAlgae(algaeDetect, 0, 70),
+                            EndEffectorCommands.run(endEffector, 0.2),
+                            SensorRangeCommands.waitForAlgae(algaeDetect, 0, 100),
                             Commands.waitSeconds(1),
                             AlgaePivotCommands.elevatorMove(algaepivot),
                             ElevatorCommands.reset(elevator),
                             AlgaePivotCommands.stow(algaepivot),
-                            EndEffectorCommands.run(endEffector, 0.08)
+                            EndEffectorCommands.run(endEffector, 0.03)
+                        ).schedule();
+                        break;
+
+                    case ALGAE2:
+                        Commands.sequence(
+                            AlgaePivotCommands.elevatorMove(algaepivot),
+                            Commands.waitSeconds(0.1),
+                            ElevatorCommands.Algae2(elevator),
+                            AlgaePivotCommands.algae(algaepivot),
+                            EndEffectorCommands.run(endEffector, 0.2),
+                            SensorRangeCommands.waitForAlgae(algaeDetect, 0, 100),
+                            Commands.waitSeconds(1),
+                            AlgaePivotCommands.elevatorMove(algaepivot),
+                            ElevatorCommands.reset(elevator),
+                            AlgaePivotCommands.stow(algaepivot),
+                            EndEffectorCommands.run(endEffector, 0.03)
                         ).schedule();
                         break;
 
@@ -224,15 +317,12 @@ public class RobotContainer {
                     case SCORE_L1:
                         Commands.sequence(
                             SensorRangeCommands.waitForCoral(eeCoral, 0, 100),
-                                    AlgaePivotCommands.elevatorMove(algaepivot),
                                     Commands.waitSeconds(0.1),
                                     ElevatorCommands.goToLevel1(elevator),
-                                    AlgaePivotCommands.stow(algaepivot),
                                     Commands.waitSeconds(1),
                                     EndEffectorCommands.run(endEffector, 0.2),
                                     Commands.waitSeconds(0.8),
                                     EndEffectorCommands.stop(endEffector),
-                                    AlgaePivotCommands.elevatorMove(algaepivot),
                                     ElevatorCommands.reset(elevator),
                                     AlgaePivotCommands.stow(algaepivot)
                         ).schedule();
@@ -244,7 +334,6 @@ public class RobotContainer {
                                 // Step 1: Get ready at scoring position
                                 Commands.sequence(
                                     SensorRangeCommands.waitForCoral(eeCoral, 0, 100),
-                                    AlgaePivotCommands.elevatorMove(algaepivot),
                                     Commands.waitSeconds(0.1),
                                     ElevatorCommands.goToLevel2(elevator),
                                     AlgaePivotCommands.stow(algaepivot)
@@ -258,7 +347,6 @@ public class RobotContainer {
                                     EndEffectorCommands.run(endEffector, 0.6),
                                     Commands.waitSeconds(0.8),
                                     EndEffectorCommands.stop(endEffector),
-                                    AlgaePivotCommands.elevatorMove(algaepivot),
                                     ElevatorCommands.reset(elevator),
                                     AlgaePivotCommands.stow(algaepivot)
                                 ).schedule();
@@ -278,7 +366,6 @@ public class RobotContainer {
                                 // Step 1: Get ready at scoring position
                                 Commands.sequence(
                                     SensorRangeCommands.waitForCoral(eeCoral, 0, 100),
-                                    AlgaePivotCommands.elevatorMove(algaepivot),
                                     Commands.waitSeconds(0.1),
                                     ElevatorCommands.goToLevel3(elevator),
                                     AlgaePivotCommands.stow(algaepivot)
@@ -292,7 +379,6 @@ public class RobotContainer {
                                     EndEffectorCommands.run(endEffector, 0.6),
                                     Commands.waitSeconds(0.8),
                                     EndEffectorCommands.stop(endEffector),
-                                    AlgaePivotCommands.elevatorMove(algaepivot),
                                     ElevatorCommands.reset(elevator),
                                     AlgaePivotCommands.stow(algaepivot)
                                 ).schedule();
@@ -312,7 +398,6 @@ public class RobotContainer {
                                 // Step 1: Get ready at scoring position
                                 Commands.sequence(
                                     SensorRangeCommands.waitForCoral(eeCoral, 0, 100),
-                                    AlgaePivotCommands.elevatorMove(algaepivot),
                                     Commands.waitSeconds(0.1),
                                     ElevatorCommands.goToLevel4(elevator),
                                     AlgaePivotCommands.stow(algaepivot)
@@ -326,7 +411,6 @@ public class RobotContainer {
                                     EndEffectorCommands.run(endEffector, 0.6),
                                     Commands.waitSeconds(0.8),
                                     EndEffectorCommands.stop(endEffector),
-                                    AlgaePivotCommands.elevatorMove(algaepivot),
                                     ElevatorCommands.reset(elevator),
                                     AlgaePivotCommands.stow(algaepivot)
                                 ).schedule();

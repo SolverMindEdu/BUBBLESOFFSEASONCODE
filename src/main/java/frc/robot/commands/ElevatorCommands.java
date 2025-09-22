@@ -60,6 +60,13 @@ public class ElevatorCommands {
         );
     }
 
+    public static Command Algae2(ElevatorSubsystem elevator) {
+        return Commands.sequence(
+            new InstantCommand(() -> elevator.setPosition(ElevatorSubsystem.Algae2), elevator),
+            new WaitForElevatorCommand(elevator, ElevatorSubsystem.Algae2)
+        );
+    }
+
     public static InstantCommand stop(ElevatorSubsystem elevator) {
         return new InstantCommand(elevator::stop, elevator);
     }

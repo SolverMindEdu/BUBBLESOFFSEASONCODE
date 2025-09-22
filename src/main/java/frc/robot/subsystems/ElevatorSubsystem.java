@@ -20,13 +20,13 @@ public class ElevatorSubsystem extends SubsystemBase {
 
     // Positions in rotations
     public static final double Reset  = 0.2;
-    public static final double Intake = 1.1;
+    public static final double Intake = 0.9;
     public static final double LEVEL1 = 12.0;
     public static final double LEVEL2 = 20.0;
-    public static final double LEVEL3 = 31.0;
-    public static final double LEVEL4 = 50.0;
+    public static final double LEVEL3 = 33;
+    public static final double LEVEL4 = 49;
     public static final double Algae1 = 12;
-    public static final double Algae2 = 32.0;
+    public static final double Algae2 = 22;
 
     // Tolerance for checking "at target"
     public static final double POSITION_TOLERANCE = 0.5;
@@ -46,8 +46,8 @@ public class ElevatorSubsystem extends SubsystemBase {
         slot0.kS = 0;
 
         // Motion Magic settings (slowed for testing)
-        configs.MotionMagic.MotionMagicCruiseVelocity = 25; // rotations/sec
-        configs.MotionMagic.MotionMagicAcceleration   = 50; // rotations/sec^2
+        configs.MotionMagic.MotionMagicCruiseVelocity = 30; // rotations/sec
+        configs.MotionMagic.MotionMagicAcceleration   = 53; // rotations/sec^2
 
         leader.getConfigurator().apply(configs);
 

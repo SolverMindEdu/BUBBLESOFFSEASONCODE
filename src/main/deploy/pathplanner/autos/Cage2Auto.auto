@@ -1,0 +1,181 @@
+{
+  "version": "2025.0",
+  "command": {
+    "type": "sequential",
+    "data": {
+      "commands": [
+        {
+          "type": "named",
+          "data": {
+            "name": "AlgaeStow"
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "Drive Left Side Of Reef"
+          }
+        },
+        {
+          "type": "wait",
+          "data": {
+            "waitTime": 0.1
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "ElevatorL4"
+          }
+        },
+        {
+          "type": "wait",
+          "data": {
+            "waitTime": 0.2
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "RunEE"
+          }
+        },
+        {
+          "type": "wait",
+          "data": {
+            "waitTime": 0.3
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "StopEE"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "ResetELEVATOR"
+          }
+        },
+        {
+          "type": "wait",
+          "data": {
+            "waitTime": 0.6
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "Drive Intake"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "ElevatorIntake"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "IntakeRollers"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "IntakeRunEE"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "IntakeSensor"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "SlowIntakeRollers"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "EESensor"
+          }
+        },
+        {
+          "type": "wait",
+          "data": {
+            "waitTime": 0.15
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "StopEE"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "StopIntakeRollers"
+          }
+        },
+        {
+          "type": "wait",
+          "data": {
+            "waitTime": 0.1
+          }
+        },
+        {
+          "type": "path",
+          "data": {
+            "pathName": "DriveLeftSideFront"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "ElevatorL4"
+          }
+        },
+        {
+          "type": "wait",
+          "data": {
+            "waitTime": 0.2
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "RunEE"
+          }
+        },
+        {
+          "type": "wait",
+          "data": {
+            "waitTime": 0.3
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "StopEE"
+          }
+        },
+        {
+          "type": "named",
+          "data": {
+            "name": "ResetELEVATOR"
+          }
+        }
+      ]
+    }
+  },
+  "resetOdom": true,
+  "folder": null,
+  "choreoAuto": false
+}

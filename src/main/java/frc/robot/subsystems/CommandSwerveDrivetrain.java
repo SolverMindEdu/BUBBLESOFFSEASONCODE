@@ -61,6 +61,7 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     // Add these after your existing fields like m_sysIdRoutineToApply
     private final AprilTagFieldLayout aprilTagFieldLayout = AprilTagFields.k2025ReefscapeAndyMark.loadAprilTagLayoutField();
     private int aprilID;
+    private boolean visionEnabled = true;
 
     // // Scoring positions - adjust these coordinates for your field
     // private final Pose2d[] scoringPositionsBlue = {
@@ -334,43 +335,102 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         // updateMegaTag2();
     }
 
-    private void updateMegaTag2() {
-        // Tell Limelight our robot's current orientation
-        LimelightHelpers.SetRobotOrientation("limelight", 
-            getState().Pose.getRotation().getDegrees(), 
-            0, 0, 0, 0, 0);
-        
-        // Get MegaTag2 pose estimate
-        LimelightHelpers.PoseEstimate mt2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
-        
+    private void mt1HeadingUpdate() {
         boolean doRejectUpdate = false;
+        LimelightHelpers.PoseEstimate mt1 = LimelightHelpers.getBotPoseEstimate_wpiBlue("limelight");
+        LimelightHelpers.SetRobotOrientation(
+            "limelight", getState().Pose.getRotation().getDegrees(), 0, 0, 0, 0, 0);
         
-        // Reject if no tags visible
-        if (mt2.tagCount == 0) {
-            doRejectUpdate = true;
-        }
-        
-        // Reject if we're spinning too fast
-        if (Math.abs(getState().Speeds.omegaRadiansPerSecond) > Math.toRadians(360)) {
-            doRejectUpdate = true;
-        }
-        
-        // Reject if pose is too far from current estimate (likely bad measurement)
-        Pose2d currentPose = getState().Pose;
-        double distanceFromCurrent = currentPose.getTranslation().getDistance(mt2.pose.getTranslation());
-        if (distanceFromCurrent > 2.0) { // More than 2 meters away = probably bad
-            doRejectUpdate = true;
-            SmartDashboard.putString("Vision Status", "Rejected: Too far (" + String.format("%.2f", distanceFromCurrent) + "m)");
-        }
-        
-        // Only update if we have good data
-        if (!doRejectUpdate) {
-            // Use conservative standard deviations
-            setVisionMeasurementStdDevs(VecBuilder.fill(1.0, 1.0, 9999999));
-            addVisionMeasurement(mt2.pose, mt2.timestampSeconds);
-            SmartDashboard.putString("Vision Status", "Updated with " + mt2.tagCount + " tags");
+        if (mt1 != null) {
+            if (mt1.tagCount == 1 && mt1.rawFiducials.length == 1) {
+                if (mt1.rawFiducials[0].ambiguity > 0.7) {
+                    doRejectUpdate = true;
+                }
+                if (mt1.rawFiducials[0].distToCamera > 3) {
+                    doRejectUpdate = true;
+                }
+            }
+            if (mt1.tagCount == 0) {
+                doRejectUpdate = true;
+            }
+            if (!doRejectUpdate) {
+                // Only trust rotation from MT1, not position
+                setVisionMeasurementStdDevs(VecBuilder.fill(9999999, 9999999, 0.7));
+                addVisionMeasurement(mt1.pose, mt1.timestampSeconds);
+            }
         }
     }
+
+    private void updateVision() {
+        LimelightHelpers.PoseEstimate mt2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
+        LimelightHelpers.SetIMUMode("limelight", 0);
+        boolean doRejectUpdate = false;
+        
+        LimelightHelpers.SetRobotOrientation(
+            "limelight", getState().Pose.getRotation().getDegrees(), 0, 0, 0, 0, 0);
+        
+        if (mt2 != null) {
+            // Reject if spinning too fast (angular velocity > 360 deg/sec)
+            if (Math.abs(getState().Speeds.omegaRadiansPerSecond) > Math.toRadians(360)) {
+                doRejectUpdate = true;
+            }
+            if (mt2.tagCount == 0) {
+                doRejectUpdate = true;
+            }
+            
+            // Additional filtering - reject if pose is too far from current estimate
+            Pose2d currentPose = getState().Pose;
+            double distanceFromCurrent = currentPose.getTranslation().getDistance(mt2.pose.getTranslation());
+            if (distanceFromCurrent > 2.0) {
+                doRejectUpdate = true;
+                SmartDashboard.putString("Vision Status", "Rejected: Too far (" + String.format("%.2f", distanceFromCurrent) + "m)");
+            }
+            
+            if (!doRejectUpdate) {
+                setVisionMeasurementStdDevs(VecBuilder.fill(.7, .7, 9999999));
+                addVisionMeasurement(mt2.pose, mt2.timestampSeconds);
+                SmartDashboard.putString("Vision Status", "MT2 Updated with " + mt2.tagCount + " tags");
+            }
+        }
+    }
+
+    // private void updateMegaTag2() {
+    //     // Tell Limelight our robot's current orientation
+    //     LimelightHelpers.SetRobotOrientation("limelight", 
+    //         getState().Pose.getRotation().getDegrees(), 
+    //         0, 0, 0, 0, 0);
+        
+    //     // Get MegaTag2 pose estimate
+    //     LimelightHelpers.PoseEstimate mt2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
+        
+    //     boolean doRejectUpdate = false;
+        
+    //     // Reject if no tags visible
+    //     if (mt2.tagCount == 0) {
+    //         doRejectUpdate = true;
+    //     }
+        
+    //     // Reject if we're spinning too fast
+    //     if (Math.abs(getState().Speeds.omegaRadiansPerSecond) > Math.toRadians(360)) {
+    //         doRejectUpdate = true;
+    //     }
+        
+    //     // Reject if pose is too far from current estimate (likely bad measurement)
+    //     Pose2d currentPose = getState().Pose;
+    //     double distanceFromCurrent = currentPose.getTranslation().getDistance(mt2.pose.getTranslation());
+    //     if (distanceFromCurrent > 2.0) { // More than 2 meters away = probably bad
+    //         doRejectUpdate = true;
+    //         SmartDashboard.putString("Vision Status", "Rejected: Too far (" + String.format("%.2f", distanceFromCurrent) + "m)");
+    //     }
+        
+    //     // Only update if we have good data
+    //     if (!doRejectUpdate) {
+    //         // Use conservative standard deviations
+    //         setVisionMeasurementStdDevs(VecBuilder.fill(1.0, 1.0, 9999999));
+    //         addVisionMeasurement(mt2.pose, mt2.timestampSeconds);
+    //         SmartDashboard.putString("Vision Status", "Updated with " + mt2.tagCount + " tags");
+    //     }
+    // }
 
     private void startSimThread() {
         m_lastSimTime = Utils.getCurrentTimeSeconds();
@@ -434,50 +494,50 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     /**
      * Get the nearest AprilTag reef pose
      */
-    public Pose2d getNearestReefPose() {
-        int initTag;
-        int endTag;
-        ArrayList<Pose2d> reefTagPoses = new ArrayList<Pose2d>(6);
+    // public Pose2d getNearestReefPose() {
+    //     int initTag;
+    //     int endTag;
+    //     ArrayList<Pose2d> reefTagPoses = new ArrayList<Pose2d>(6);
         
-        if (isRedAlliance()) {
-            initTag = 6;
-            endTag = 12;
-        } else {
-            initTag = 17; 
-            endTag = 23;
-        }
+    //     if (isRedAlliance()) {
+    //         initTag = 6;
+    //         endTag = 12;
+    //     } else {
+    //         initTag = 17; 
+    //         endTag = 23;
+    //     }
         
-        // Get poses of reef april tags based on alliance
-        for (int i = initTag; i < endTag; i++) {
-            if (aprilTagFieldLayout.getTagPose(i).isPresent()) {
-                reefTagPoses.add(aprilTagFieldLayout.getTagPose(i).get().toPose2d());
-            }
-        }
+    //     // Get poses of reef april tags based on alliance
+    //     for (int i = initTag; i < endTag; i++) {
+    //         if (aprilTagFieldLayout.getTagPose(i).isPresent()) {
+    //             reefTagPoses.add(aprilTagFieldLayout.getTagPose(i).get().toPose2d());
+    //         }
+    //     }
         
-        if (reefTagPoses.isEmpty()) {
-            return getPose(); // Return current pose if no tags found
-        }
+    //     if (reefTagPoses.isEmpty()) {
+    //         return getPose(); // Return current pose if no tags found
+    //     }
         
-        // Find nearest reef tag
-        Pose2d nearestPose = new Pose2d(
-            getPose().nearest(reefTagPoses).getTranslation(),
-            getPose().nearest(reefTagPoses).getRotation().rotateBy(Rotation2d.k180deg)
-        );
+    //     // Find nearest reef tag
+    //     Pose2d nearestPose = new Pose2d(
+    //         getPose().nearest(reefTagPoses).getTranslation(),
+    //         getPose().nearest(reefTagPoses).getRotation().rotateBy(Rotation2d.k180deg)
+    //     );
         
-        aprilID = reefTagPoses.indexOf(nearestPose) + (isRedAlliance() ? 6 : 17);
-        SmartDashboard.putNumber("AprilTag ID", aprilID);
-        SmartDashboard.putString("Nearest Reef Pose", nearestPose.toString());
+    //     aprilID = reefTagPoses.indexOf(nearestPose) + (isRedAlliance() ? 6 : 17);
+    //     SmartDashboard.putNumber("AprilTag ID", aprilID);
+    //     SmartDashboard.putString("Nearest Reef Pose", nearestPose.toString());
         
-        // Apply chassis offset
-        double chassisOffset = 0.5; // meters - adjust for your robot
-        double angle = nearestPose.getRotation().getRadians();
+    //     // Apply chassis offset
+    //     double chassisOffset = 0.5; // meters - adjust for your robot
+    //     double angle = nearestPose.getRotation().getRadians();
         
-        return new Pose2d(
-            nearestPose.getX() - chassisOffset * Math.cos(angle),
-            nearestPose.getY() + -chassisOffset * Math.sin(angle), 
-            nearestPose.getRotation()
-        );
-    }
+    //     return new Pose2d(
+    //         nearestPose.getX() - chassisOffset * Math.cos(angle),
+    //         nearestPose.getY() + -chassisOffset * Math.sin(angle), 
+    //         nearestPose.getRotation()
+    //     );
+    // }
     
     /**
      * Drive to a specific pose using PathPlanner
