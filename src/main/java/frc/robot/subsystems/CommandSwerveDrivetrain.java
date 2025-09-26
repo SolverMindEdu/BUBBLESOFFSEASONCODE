@@ -58,10 +58,11 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     private final SwerveRequest.SysIdSwerveTranslation m_translationCharacterization = new SwerveRequest.SysIdSwerveTranslation();
     private final SwerveRequest.SysIdSwerveSteerGains m_steerCharacterization = new SwerveRequest.SysIdSwerveSteerGains();
     private final SwerveRequest.SysIdSwerveRotation m_rotationCharacterization = new SwerveRequest.SysIdSwerveRotation();
-    // Add these after your existing fields like m_sysIdRoutineToApply
+    // MegaTag localization variables
     private final AprilTagFieldLayout aprilTagFieldLayout = AprilTagFields.k2025ReefscapeAndyMark.loadAprilTagLayoutField();
     private int aprilID;
     private boolean visionEnabled = true;
+    private boolean useMegaTag2 = true;
 
     // // Scoring positions - adjust these coordinates for your field
     // private final Pose2d[] scoringPositionsBlue = {
@@ -332,7 +333,9 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
                 m_hasAppliedOperatorPerspective = true;
             });
         }
-        // updateMegaTag2();
+        if (visionEnabled) {
+            updateMegaTagOdometry();
+        }
     }
 
     private void mt1HeadingUpdate() {
@@ -361,36 +364,42 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
         }
     }
 
-    private void updateVision() {
-        LimelightHelpers.PoseEstimate mt2 = LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
-        LimelightHelpers.SetIMUMode("limelight", 0);
-        boolean doRejectUpdate = false;
-        
+    public void updateMegaTagOdometry() {
+        // Set robot orientation for Limelight
         LimelightHelpers.SetRobotOrientation(
-            "limelight", getState().Pose.getRotation().getDegrees(), 0, 0, 0, 0, 0);
-        
-        if (mt2 != null) {
-            // Reject if spinning too fast (angular velocity > 360 deg/sec)
-            if (Math.abs(getState().Speeds.omegaRadiansPerSecond) > Math.toRadians(360)) {
+            "limelight",
+            getState().Pose.getRotation().getDegrees(),
+            0, 0, 0, 0, 0
+        );
+
+        if (useMegaTag2) {
+            // Get MegaTag2 pose estimate
+            LimelightHelpers.PoseEstimate mt2 =
+                LimelightHelpers.getBotPoseEstimate_wpiBlue_MegaTag2("limelight");
+
+            // Reject updates under certain conditions
+            boolean doRejectUpdate = false;
+
+            // Reject if spinning too fast (720 degrees per second)
+            if (Math.abs(getState().Speeds.omegaRadiansPerSecond) > Math.toRadians(720)) {
                 doRejectUpdate = true;
             }
+
             if (mt2.tagCount == 0) {
                 doRejectUpdate = true;
             }
-            
-            // Additional filtering - reject if pose is too far from current estimate
-            Pose2d currentPose = getState().Pose;
-            double distanceFromCurrent = currentPose.getTranslation().getDistance(mt2.pose.getTranslation());
-            if (distanceFromCurrent > 2.0) {
-                doRejectUpdate = true;
-                SmartDashboard.putString("Vision Status", "Rejected: Too far (" + String.format("%.2f", distanceFromCurrent) + "m)");
-            }
-            
+
+            // Add vision measurement if valid
             if (!doRejectUpdate) {
                 setVisionMeasurementStdDevs(VecBuilder.fill(.7, .7, 9999999));
                 addVisionMeasurement(mt2.pose, mt2.timestampSeconds);
                 SmartDashboard.putString("Vision Status", "MT2 Updated with " + mt2.tagCount + " tags");
+            } else {
+                SmartDashboard.putString("Vision Status", "MT2 Update Rejected");
             }
+        } else {
+            // MegaTag1 fallback implementation
+            mt1HeadingUpdate();
         }
     }
 
@@ -571,6 +580,36 @@ public class CommandSwerveDrivetrain extends TunerSwerveDrivetrain implements Su
     private boolean isRedAlliance() {
         var alliance = DriverStation.getAlliance();
         return alliance.isPresent() && alliance.get() == DriverStation.Alliance.Red;
+    }
+
+    /**
+     * Enable or disable vision updates
+     */
+    public void setVisionEnabled(boolean enabled) {
+        this.visionEnabled = enabled;
+        SmartDashboard.putBoolean("Vision Enabled", visionEnabled);
+    }
+
+    /**
+     * Get current vision enabled state
+     */
+    public boolean isVisionEnabled() {
+        return visionEnabled;
+    }
+
+    /**
+     * Toggle between MegaTag1 and MegaTag2
+     */
+    public void setUseMegaTag2(boolean useMegaTag2) {
+        this.useMegaTag2 = useMegaTag2;
+        SmartDashboard.putBoolean("Use MegaTag2", useMegaTag2);
+    }
+
+    /**
+     * Get current MegaTag mode
+     */
+    public boolean isUsingMegaTag2() {
+        return useMegaTag2;
     }
 
     // public Command driveToPose(Pose2d pose) {
